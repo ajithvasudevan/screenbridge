@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Screen Bridge</string>
+    <string name="service_label">Screen Bridge Accessibility</string>
+    <string name="accessibility_desc">Lets a trusted local agent read the screen layout and perform taps, swipes and screenshots over HTTP/MQTT.</string>
+</resources>

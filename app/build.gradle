@@ -1,0 +1,57 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+def secretsFile = rootProject.file('app/secrets.properties')
+def secrets = new Properties()
+if (secretsFile.exists()) { secretsFile.withInputStream { secrets.load(it) } }
+
+android {
+    namespace 'dev.ajithv.screenbridge'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'dev.ajithv.screenbridge'
+        minSdk 30
+        targetSdk 34
+        versionCode 12
+        versionName '0.12'
+
+        // the phone is arm64; drop the other ABIs' bundled ML Kit OCR .so (52MB -> ~20MB)
+        ndk { abiFilters 'arm64-v8a' }
+
+        buildConfigField "String", "BROKER_HOST", "\"${secrets.getProperty('broker_host', '')}\""
+        buildConfigField "int",    "BROKER_PORT", "${secrets.getProperty('broker_port', '1883')}"
+        buildConfigField "String", "BROKER_USER", "\"${secrets.getProperty('broker_user', '')}\""
+        buildConfigField "String", "BROKER_PASS", "\"${secrets.getProperty('broker_pass', '')}\""
+        buildConfigField "String", "MQTT_BASE",   "\"${secrets.getProperty('mqtt_base', 'screenbridge')}\""
+        buildConfigField "int",    "HTTP_PORT",   "${secrets.getProperty('http_port', '8080')}"
+        buildConfigField "String", "AUTH_TOKEN",  "\"${secrets.getProperty('auth_token', '')}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+dependencies {
+    implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+}
