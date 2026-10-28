@@ -17,30 +17,39 @@ Both channels funnel every command through one dispatcher (`BridgeService.handle
 ## Command schema
 
 A command is a JSON object `{ "op": "...", ...args }`; the result is `{ "ok": bool, ... }`.
-An optional `"id"` is echoed back for correlation.
+An optional `"_cid"` (correlation id) is echoed back unchanged — kept **separate** from the `id`
+*selector* below so correlation never interferes with node matching.
 
 | op | args | effect |
 |----|------|--------|
 | `ping` / `status` | – | service/http/mqtt/ip/foreground |
-| `hierarchy` | `mode` = `tree`\|`flat`, `maxDepth`, `maxNodes` | dump nodes |
+| `hierarchy` | `mode` = `tree`\|`flat`, `maxDepth`, `maxNodes` | dump the view tree |
+| `windows` | – | list all windows (id, layer, bounds, active/focused) |
 | `tap` | `x`,`y`,`duration?` | gesture tap |
 | `longpress` | `x`,`y`,`duration?`=600 | gesture long-press |
 | `swipe` / `drag` | `x1`,`y1`,`x2`,`y2`,`duration?` | gesture swipe |
+| `tap_node` | *selector* + `dx?`,`dy?`,`duration?`,`longpress?` | gesture-tap a node's center (+offset) — works where `ACTION_CLICK` is ignored |
 | `click` | *selector* | ACTION_CLICK (climbs to clickable ancestor) |
 | `longclick` | *selector* | ACTION_LONG_CLICK |
 | `settext` | *selector?* + `value` | ACTION_SET_TEXT (default = focused editable) |
+| `type` | *selector?* + `value`, `per_char_ms?`=150, `clear?`, `tap_first?` | type **incrementally**, char-by-char (fires JS/Angular input filters a one-shot `settext` misses); returns `{ok,text}` |
+| `get_text` | *selector* | read a node's text / content-description |
 | `scroll` | *selector?* + `direction` | ACTION_SCROLL_FORWARD/BACKWARD |
 | `global` | `action` = back/home/recents/notifications/quicksettings/power/lock/screenshot/dpad_* | performGlobalAction |
 | `back`/`home`/`recents`/`notifications` | – | shortcuts |
-| `launch` | `pkg` | start an app |
+| `launch` | `pkg`, `clear?` | start an app (`clear`=true resets its task to the root activity) |
 | `foreground` | – | current package/activity |
 | `find` | *selector* + `limit?` | list matching nodes |
-| `wait` | *selector* + `timeout?` | poll until a node appears |
+| `wait` | *selector* + `until`=`present`\|`gone`\|`stable`, `timeout?`, `interval?` | poll until the condition holds |
+| `ocr` | `scale?` | on-device text recognition (ML Kit) → recognized text + boxes |
 | `screenshot` | `format`=png\|jpeg, `scale`, `quality` | base64 image (MQTT/JSON) |
 
-**Selector** (any subset): `text` (exact, ci), `textContains`/`contains`, `desc`,
-`descContains`, `id` (viewIdResourceName *endsWith*), `cls`/`class` (contains), `clickable`,
-`editable`, `index` (nth match).
+Any op may carry `"shot": true` to also attach a screenshot of the result.
+
+**Selector** (any subset): `text` (exact, ci), `textContains`/`contains`, `desc`, `descContains`,
+`label` (text **or** desc contains), `id` (viewIdResourceName *endsWith*), `cls`/`class` (contains),
+`clickable`, `editable`, `visible_only` (on-screen only), `index` (nth match). Add `allWindows` to
+search every window, not just the active one.
 
 ## HTTP
 
@@ -60,6 +69,10 @@ If `auth_token` is set in `secrets.properties`, every request needs header
 - `screenbridge/result` — every result (screenshots: compact ack only).
 - `screenbridge/screenshot` — screenshot result incl. base64 image.
 - `screenbridge/availability` — retained `online`/`offline` (LWT).
+
+Correlate request↔reply with `_cid` (echoed back on `screenbridge/result`). The client subscribes to
+`screenbridge/cmd/#` **only** (subscribing to both `cmd` and `cmd/#` would double-deliver), and runs
+each message on a worker thread so a slow or large op can't wedge the channel.
 
 ## Build (europa)
 
